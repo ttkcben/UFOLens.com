@@ -27,27 +27,43 @@
 | 層級 | 引擎 | 語言 |
 |------|------|------|
 | 人工核稿級 | Claude（Anthropic Opus） | en（canonical）、zh-Hant、zh-Hans、ja、es、de |
-| 機器翻譯級 | 本機 Ollama gemma4:31b | 其餘 ~266 語 |
+| 機器核稿級 | 本機 Ollama gemma4:31b | 部分 Tier1+Tier2 主流語（fr、ar、hi、pt-BR、pt-PT、ru…）|
+| **主力流程** | **Gemini Pro（手動驅動，prompts 在 `../docs/`）** | **其餘 ~260 語** |
 
-機器翻譯層需要母語審稿者校對才能對外發布。請在 issue / PR 標 `marketing-i18n-review-<lang>`。
+對外發布前所有非 Claude 語言都需要母語審稿者校對。請在 issue / PR 標 `marketing-i18n-review-<lang>`。
 
-## 重生指令
+## Gemini 工作流（主力）
 
-英文原稿改動後，要重跑機器翻譯部分：
+1. 開啟 `marketing/docs/gemini_prompt_sentences_world_translations.txt`
+2. 用 `python3 status.py --prompt-numbers` 看下一個該做的 prompt 編號
+3. 在該檔內搜 `PROMPT NNN` 找對應 block，整段 `=== BEGIN PROMPT === … === END PROMPT ===` 貼到 Gemini Pro
+4. Gemini 回三份 markdown（中間以 `=== FILE ... ===` 分隔）
+5. 把整段回應丟給 `save_gemini_output.py`：
 
 ```bash
-cd marketing/20260513/github
-# 預熱本機 Ollama（消除 ~17s 冷啟動）
-python3 translate_all.py --warmup
-# 批次翻譯（冪等：已存在的檔案不會覆蓋）
-python3 translate_all.py --all
-# 指定單一語言重翻
-python3 translate_all.py --lang fr
-# 強制重翻所有語言（覆蓋既有）
-python3 translate_all.py --all --force
+# stdin 模式（從剪貼簿）
+pbpaste | python3 save_gemini_output.py
+
+# 或先存到檔
+python3 save_gemini_output.py /tmp/gemini-fr.txt
 ```
 
-執行日誌寫到 `./translate_all.log`。預估全 266 語 × 3 篇 ≈ 30–40 小時（gemma4:31b 在 M1 Max 約 14 tok/s）；建議週末跑或 launchd 排程。
+腳本會：偵測語言碼 → 拆三檔 → 結構驗證 → atomic write 到本目錄。
+
+## 工具
+
+| 檔名 | 用途 |
+|------|------|
+| `status.py` | 顯示完成進度、缺漏的 (語言, 篇) 配對、對應 Gemini PROMPT 編號 |
+| `save_gemini_output.py` | 解析 Gemini 多檔輸出並原子寫盤 |
+| `translate_all.py` | （備用）本機 Ollama gemma + NLLB-200 雙後端批次譯；用 `--lang xx` 補單一語言 |
+
+```bash
+python3 status.py                  # 摘要
+python3 status.py --missing        # 一行一個缺漏檔
+python3 status.py --prompt-numbers # 缺漏語對應 Gemini PROMPT 編號
+python3 status.py --done           # 已完成（3/3）的語言
+```
 
 ## 法律邊界（每個語言版本必須保留下列敘述）
 
